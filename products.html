@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Frame-Options" content="DENY"><meta name="referrer" content="no-referrer">
+  <title>Products — NurturedChoiceProducts</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="sidebar-root"></div>
+<div class="app-layout">
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="page-title">Products</h1></div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbar-date"></span>
+        <div class="search-bar">
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search products…">
+        </div>
+        <button class="btn btn-primary" onclick="openNewProduct()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Product
+        </button>
+      </div>
+    </header>
+    <div class="content-area">
+      <div class="tabs" id="view-tabs" style="max-width:260px;margin-bottom:20px">
+        <button class="tab-btn active" data-tab="grid-view">Grid View</button>
+        <button class="tab-btn" data-tab="table-view">Table View</button>
+      </div>
+
+      <div id="grid-view" class="tab-panel active">
+        <div class="products-grid" id="products-grid"></div>
+      </div>
+
+      <div id="table-view" class="tab-panel">
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                  <th>SKU</th>
+                  <th>Unit</th>
+                  <th>Price</th>
+                  <th>Cost Price</th>
+                  <th>Stock</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="products-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="product-modal-title">Add Product</h3>
+      <button class="modal-close" onclick="Modal.close('product-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Product Name</label>
+        <input class="form-control" type="text" id="p-name" placeholder="e.g. Quick Health Honey" maxlength="100">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">SKU / Code</label>
+          <input class="form-control" type="text" id="p-sku" placeholder="e.g. QHH-001" maxlength="30">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Icon (emoji)</label>
+          <input class="form-control" type="text" id="p-emoji" placeholder="🍯" maxlength="4">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Selling Price (KSh)</label>
+          <input class="form-control" type="number" id="p-price" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cost Price (KSh)</label>
+          <input class="form-control" type="number" id="p-cost" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <input class="form-control" type="text" id="p-unit" placeholder="e.g. jar (500g)" maxlength="40">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stock Quantity</label>
+          <input class="form-control" type="number" id="p-stock" min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description (optional)</label>
+        <textarea class="form-control" id="p-description" rows="2" maxlength="300" placeholder="Short description"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;color:var(--slate)">
+          <input type="checkbox" id="p-active" checked style="width:16px;height:16px;accent-color:var(--forest)">
+          Active (visible for sale)
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modal.close('product-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Price Update Modal -->
+<div class="modal-overlay" id="price-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3 class="modal-title">Update Price</h3>
+      <button class="modal-close" onclick="Modal.close('price-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--slate)" id="price-modal-desc"></p>
+      <div class="form-group">
+        <label class="form-label">New Selling Price (KSh)</label>
+        <input class="form-control" type="number" id="new-price" min="0" step="0.01">
+      </div>
+      <input type="hidden" id="price-product-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modal.close('price-modal')">Cancel</button>
+      <button class="btn btn-gold" onclick="confirmPriceUpdate()">Update Price</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  let userRole = 'user';
+  async function init() {
+    const session = await Auth.require();
+    userRole = session.role;
+    document.getElementById('sidebar-root').innerHTML = renderSidebar();
+    await initSidebar();
+    initTabs('view-tabs');
+    await renderProducts();
+  }
+  init();
+
+  let editingProductId = null;
+  let searchQuery = '';
+
+  async function renderProducts() {
+    let products = await DB.get('products');
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      products = products.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+    }
+
+    // Grid view
+    const grid = document.getElementById('products-grid');
+    if (!products.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📦</div><h3>No products found</h3><p>Add your first product to get started</p></div>`;
+    } else {
+      grid.innerHTML = products.map((p, i) => `
+        <div class="product-card animate-fade-up" style="animation-delay:${i*0.05}s; ${!p.active?'opacity:0.55':''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div class="product-emoji">${Fmt.escape(p.emoji||'📦')}</div>
+            ${!p.active ? '<span class="badge badge-neutral">Inactive</span>' : ''}
+          </div>
+          <div class="product-name">${Fmt.escape(p.name)}</div>
+          <div class="product-sku">SKU: ${Fmt.escape(p.sku)} • ${Fmt.escape(p.unit||'')}</div>
+          <div class="product-price">${Fmt.currency(p.price)}</div>
+          <div class="product-stock ${p.stock < 20 ? 'low' : ''}">${p.stock} units in stock ${p.stock < 20 ? '⚠' : ''}</div>
+          ${p.description ? `<p style="font-size:0.8125rem;color:var(--muted);margin-top:8px">${Fmt.escape(p.description)}</p>` : ''}
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="openEditProduct('${p.id}')">Edit</button>
+            ${userRole === 'admin' ? `
+              <button class="btn btn-gold btn-sm" onclick="openPriceUpdate('${p.id}')" title="Update Price">💰</button>
+              <button class="btn btn-sm" style="color:var(--danger);background:var(--danger-light);border:none" onclick="deleteProduct('${p.id}')" title="Remove">🗑</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Table view
+    const tbody = document.getElementById('products-tbody');
+    if (!products.length) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📦</div><h3>No products found</h3></div></td></tr>`;
+    } else {
+      tbody.innerHTML = products.map(p => `
+        <tr style="${!p.active?'opacity:0.55':''}">
+          <td style="font-size:1.5rem">${Fmt.escape(p.emoji||'📦')}</td>
+          <td><strong>${Fmt.escape(p.name)}</strong>${p.description?`<br><span style="font-size:0.75rem;color:var(--muted)">${Fmt.escape(p.description)}</span>`:''}</td>
+          <td>${Fmt.escape(p.sku)}</td>
+          <td>${Fmt.escape(p.unit||'—')}</td>
+          <td><strong style="color:var(--gold)">${Fmt.currency(p.price)}</strong></td>
+          <td>${Fmt.currency(p.costPrice)}</td>
+          <td class="${p.stock<20?'text-danger font-bold':''}">${p.stock}</td>
+          <td><span class="badge badge-${p.active?'success':'neutral'}">${p.active?'Active':'Inactive'}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm" onclick="openEditProduct('${p.id}')">Edit</button>
+              ${userRole === 'admin' ? `
+                <button class="btn btn-gold btn-sm" onclick="openPriceUpdate('${p.id}')">Price</button>
+                <button class="btn btn-sm" style="color:var(--danger);background:var(--danger-light);border:none" onclick="deleteProduct('${p.id}')">Remove</button>
+              ` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  function openNewProduct() {
+    editingProductId = null;
+    document.getElementById('product-modal-title').textContent = 'Add Product';
+    ['p-name','p-sku','p-emoji','p-unit','p-description'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('p-price').value = '';
+    document.getElementById('p-cost').value = '';
+    document.getElementById('p-stock').value = '';
+    document.getElementById('p-active').checked = true;
+    Modal.open('product-modal');
+  }
+
+  async function openEditProduct(id) {
+    const p = await DB.findById('products', id);
+    if (!p) return;
+    editingProductId = id;
+    document.getElementById('product-modal-title').textContent = `Edit ${p.name}`;
+    document.getElementById('p-name').value = p.name;
+    document.getElementById('p-sku').value = p.sku;
+    document.getElementById('p-emoji').value = p.emoji || '';
+    document.getElementById('p-price').value = p.price;
+    document.getElementById('p-cost').value = p.costPrice;
+    document.getElementById('p-unit').value = p.unit || '';
+    document.getElementById('p-stock').value = p.stock;
+    document.getElementById('p-description').value = p.description || '';
+    document.getElementById('p-active').checked = !!p.active;
+    Modal.open('product-modal');
+  }
+
+  async function saveProduct() {
+    const name = document.getElementById('p-name').value.trim();
+    const sku = document.getElementById('p-sku').value.trim();
+    const emoji = document.getElementById('p-emoji').value.trim() || '📦';
+    const price = parseFloat(document.getElementById('p-price').value);
+    const cost = parseFloat(document.getElementById('p-cost').value) || 0;
+    const unit = document.getElementById('p-unit').value.trim();
+    const stock = parseInt(document.getElementById('p-stock').value) || 0;
+    const description = document.getElementById('p-description').value.trim();
+    const active = document.getElementById('p-active').checked;
+
+    if (!name) { Toast.error('Product name is required.'); return; }
+    if (!sku) { Toast.error('SKU is required.'); return; }
+    if (isNaN(price) || price < 0) { Toast.error('Please enter a valid selling price.'); return; }
+    if (cost < 0) { Toast.error('Cost price cannot be negative.'); return; }
+    if (stock < 0) { Toast.error('Stock cannot be negative.'); return; }
+
+    // Check SKU uniqueness
+    const dupe = (await DB.get('products')).find(p => p.sku.toLowerCase() === sku.toLowerCase() && p.id !== editingProductId);
+    if (dupe) { Toast.error(`SKU "${sku}" is already used by another product.`); return; }
+
+    const data = {
+      name: Security.sanitize(name),
+      sku: Security.sanitize(sku),
+      emoji: Security.sanitize(emoji),
+      price, costPrice: cost,
+      unit: Security.sanitize(unit),
+      stock,
+      description: Security.sanitize(description),
+      active
+    };
+
+    if (editingProductId) {
+      const session = await Auth.getSession();
+      await DB.update('products', editingProductId, data);
+      await DB.log('UPDATE_PRODUCT', `Updated product ${name}`, session ? session.userId : null);
+      Toast.success(`${name} updated successfully.`);
+    } else {
+      const session = await Auth.getSession();
+      await DB.insert('products', data);
+      await DB.log('CREATE_PRODUCT', `Added product ${name}`, session ? session.userId : null);
+      Toast.success(`${name} added to catalog!`);
+    }
+    Modal.close('product-modal');
+    await renderProducts();
+  }
+
+  async function deleteProduct(id) {
+    const p = await DB.findById('products', id);
+    if (!p) return;
+    confirmAction(`Remove "${p.name}" from the product catalog? Existing invoices referencing it will keep their historical data.`, async () => {
+      await DB.delete('products', id);
+      const session = await Auth.getSession();
+      await DB.log('DELETE_PRODUCT', `Removed product ${p.name}`, session ? session.userId : null);
+      Toast.success(`${p.name} removed.`);
+      await renderProducts();
+    });
+  }
+
+  async function openPriceUpdate(id) {
+    const p = await DB.findById('products', id);
+    if (!p) return;
+    document.getElementById('price-product-id').value = id;
+    document.getElementById('price-modal-desc').innerHTML = `Update price for <strong>${Fmt.escape(p.name)}</strong><br>Current price: <strong>${Fmt.currency(p.price)}</strong>`;
+    document.getElementById('new-price').value = p.price;
+    Modal.open('price-modal');
+  }
+
+  async function confirmPriceUpdate() {
+    const id = document.getElementById('price-product-id').value;
+    const newPrice = parseFloat(document.getElementById('new-price').value);
+    if (isNaN(newPrice) || newPrice < 0) { Toast.error('Please enter a valid price.'); return; }
+    const p = await DB.findById('products', id);
+    await DB.update('products', id, { price: newPrice });
+    const session = await Auth.getSession();
+    await DB.log('PRICE_UPDATE', `Price for ${p.name} changed from KSh ${p.price} to KSh ${newPrice}`, session ? session.userId : null);
+    Toast.success(`Price updated to ${Fmt.currency(newPrice)}.`);
+    Modal.close('price-modal');
+    await renderProducts();
+  }
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    renderProducts();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="description" content="NurturedChoiceProducts Sales System">
+  <!-- Security headers via meta -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:;">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="no-referrer">
+  <title>Sign In — NurturedChoiceProducts</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="auth-page" id="auth-page">
+    <div class="auth-bg-orb"></div>
+    <div class="auth-bg-orb"></div>
+    <div class="auth-bg-orb"></div>
+
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-mark">
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/>
+          </svg>
+        </div>
+        <h1>NurturedChoice<br>Products</h1>
+        <p>Sales Management System</p>
+      </div>
+
+      <div class="auth-error" id="auth-error">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="auth-error-msg"></span>
+      </div>
+
+      <form id="login-form" novalidate autocomplete="off">
+        <div class="form-group">
+          <label class="form-label" for="email">Email Address</label>
+          <div class="input-wrap">
+            <span class="input-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <input
+              class="form-control" type="email" id="email"
+              placeholder="Enter your email" autocomplete="email"
+              maxlength="50" spellcheck="false"
+              required aria-label="Username"
+            >
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </span>
+            <input
+              class="form-control" type="password" id="password"
+              placeholder="Enter password" autocomplete="current-password"
+              maxlength="100" required aria-label="Password"
+            >
+            <button type="button" class="toggle-pw" id="toggle-pw" aria-label="Toggle password visibility">
+              <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn" style="margin-top:8px">
+          <span id="login-btn-text">Sign In</span>
+          <span id="login-spinner" class="spinner hidden" style="width:18px;height:18px;border-color:rgba(255,255,255,0.3);border-top-color:white"></span>
+        </button>
+      </form>
+
+      <p style="text-align:center;margin-top:20px;font-size:0.8rem;color:var(--muted)">
+        Use the credentials you created in <strong>Supabase Auth</strong>.
+      </p>
+      <p style="text-align:center;margin-top:10px;font-size:0.8rem;color:var(--muted)">
+        Don't have an account? <a href="register.html" style="color:var(--forest);font-weight:600">Register here</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="js/db.js"></script>
+  <script>
+    // Redirect if already logged in
+    Auth.getSession().then(session => {
+      if (session) window.location.href = 'dashboard.html';
+    }).catch(err => console.warn('Auth check failed:', err));
+
+    const form = document.getElementById('login-form');
+    const errorBox = document.getElementById('auth-error');
+    const errorMsg = document.getElementById('auth-error-msg');
+    const btnText = document.getElementById('login-btn-text');
+    const spinner = document.getElementById('login-spinner');
+    const loginBtn = document.getElementById('login-btn');
+
+    // Password toggle
+    document.getElementById('toggle-pw').addEventListener('click', function() {
+      const pw = document.getElementById('password');
+      const icon = document.getElementById('eye-icon');
+      if (pw.type === 'password') {
+        pw.type = 'text';
+        icon.innerHTML = `<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+      } else {
+        pw.type = 'password';
+        icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+      }
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorBox.classList.add('show');
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      errorBox.classList.remove('show');
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) { showError('Please enter both email and password.'); return; }
+      if (email.length > 50 || password.length > 100) { showError('Invalid input length.'); return; }
+
+      // Show loading
+      btnText.textContent = 'Signing in…';
+      spinner.classList.remove('hidden');
+      loginBtn.disabled = true;
+
+      try {
+        const result = await Auth.login(email, password);
+        if (result.ok) {
+          btnText.textContent = 'Welcome!';
+          setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
+        } else {
+          showError(result.msg);
+          btnText.textContent = 'Sign In';
+          spinner.classList.add('hidden');
+          loginBtn.disabled = false;
+          document.getElementById('password').value = '';
+        }
+      } catch (err) {
+        showError('Connection error. Please try again.');
+        btnText.textContent = 'Sign In';
+        spinner.classList.add('hidden');
+        loginBtn.disabled = false;
+      }
+    });
+
+    // Prevent form resubmission
+    if (window.history.replaceState) window.history.replaceState(null, null, window.location.href);
+  </script>
+</body>
+</html>

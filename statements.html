@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Frame-Options" content="DENY"><meta name="referrer" content="no-referrer">
+  <title>Statements — NurturedChoiceProducts</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="sidebar-root"></div>
+<div class="app-layout">
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="page-title">Statements</h1></div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbar-date"></span>
+        <button class="btn btn-primary" onclick="openNewStatement()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Statement
+        </button>
+      </div>
+    </header>
+    <div class="content-area">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Account Statements</h3>
+          <span class="badge badge-neutral" id="stmt-count">0</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Statement #</th>
+                <th>Customer</th>
+                <th>Period</th>
+                <th>Invoices</th>
+                <th>Credits</th>
+                <th>Balance</th>
+                <th>Generated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="stmt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Generate Statement Modal -->
+<div class="modal-overlay" id="stmt-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Generate Statement</h3>
+      <button class="modal-close" onclick="Modal.close('stmt-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Customer</label>
+        <select class="form-control" id="stmt-customer">
+          <option value="">-- All Customers --</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">From Date</label>
+          <input class="form-control" type="date" id="stmt-from">
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Date</label>
+          <input class="form-control" type="date" id="stmt-to">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-control" id="stmt-notes" rows="2" placeholder="Additional notes…"></textarea>
+      </div>
+      <!-- Preview summary -->
+      <div id="stmt-preview-summary" style="background:var(--ivory);border-radius:var(--radius-md);padding:16px;margin-top:8px;display:none">
+        <h4 style="font-size:0.875rem;font-weight:600;color:var(--forest);margin-bottom:8px">Statement Preview</h4>
+        <div id="stmt-summary-content"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="previewStatement()">Preview</button>
+      <button class="btn btn-primary" onclick="generateStatement()">Generate & Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Statement Modal -->
+<div class="modal-overlay" id="view-stmt-modal">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title">Statement Preview</h3>
+      <button class="modal-close" onclick="Modal.close('view-stmt-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="stmt-preview-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modal.close('view-stmt-modal')">Close</button>
+      <button class="btn btn-gold" onclick="printStatement()">🖨️ Print Statement</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  async function init() {
+    document.getElementById('sidebar-root').innerHTML = renderSidebar();
+    await initSidebar();
+    await renderStatements();
+  }
+  init();
+
+  let currentStmt = null;
+
+  async function populateCustomers() {
+    const sel = document.getElementById('stmt-customer');
+    sel.innerHTML = '<option value="">-- All Customers --</option>';
+    (await DB.get('customers')).forEach(c => {
+      sel.innerHTML += `<option value="${c.id}">${Fmt.escape(c.name)}</option>`;
+    });
+  }
+
+  async function openNewStatement() {
+    await populateCustomers();
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
+    document.getElementById('stmt-from').value = firstDay;
+    document.getElementById('stmt-to').value = lastDay;
+    document.getElementById('stmt-notes').value = '';
+    document.getElementById('stmt-preview-summary').style.display = 'none';
+    Modal.open('stmt-modal');
+  }
+
+  async function getStatementData() {
+    const customerId = document.getElementById('stmt-customer').value;
+    const from = document.getElementById('stmt-from').value;
+    const to = document.getElementById('stmt-to').value;
+
+    if (!from || !to) { Toast.error('Please select a date range.'); return null; }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to + 'T23:59:59');
+
+    if (fromDate > toDate) { Toast.error('From date must be before to date.'); return null; }
+
+    let invoices = (await DB.get('invoices')).filter(inv => {
+      const d = new Date(inv.date || inv.createdAt);
+      return d >= fromDate && d <= toDate && (!customerId || inv.customerId === customerId);
+    });
+
+    let creditNotes = (await DB.get('credit_notes')).filter(cn => {
+      const d = new Date(cn.date || cn.createdAt);
+      return d >= fromDate && d <= toDate && (!customerId || cn.customerId === customerId);
+    });
+
+    const customer = customerId ? await DB.findById('customers', customerId) : null;
+    const totalInvoiced = invoices.reduce((s, i) => s + i.total, 0);
+    const totalCredits = creditNotes.reduce((s, c) => s + c.total, 0);
+    const balance = totalInvoiced - totalCredits;
+
+    return { customerId, customer, from, to, fromDate, toDate, invoices, creditNotes, totalInvoiced, totalCredits, balance };
+  }
+
+  async function previewStatement() {
+    const data = await getStatementData();
+    if (!data) return;
+    const el = document.getElementById('stmt-preview-summary');
+    document.getElementById('stmt-summary-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div style="text-align:center">
+          <div style="font-size:1.25rem;font-weight:700;color:var(--forest)">${data.invoices.length}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">Invoices</div>
+          <div style="font-weight:600;color:var(--forest);font-size:0.875rem">${Fmt.currency(data.totalInvoiced)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.25rem;font-weight:700;color:var(--danger)">${data.creditNotes.length}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">Credit Notes</div>
+          <div style="font-weight:600;color:var(--danger);font-size:0.875rem">(${Fmt.currency(data.totalCredits)})</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.25rem;font-weight:700;color:${data.balance>=0?'var(--forest)':'var(--danger)'}">Balance</div>
+          <div style="font-size:0.75rem;color:var(--muted)">Net Amount</div>
+          <div style="font-weight:700;color:${data.balance>=0?'var(--forest)':'var(--danger)'};font-size:1rem">${Fmt.currency(data.balance)}</div>
+        </div>
+      </div>
+    `;
+    el.style.display = 'block';
+  }
+
+  async function generateStatement() {
+    const data = await getStatementData();
+    if (!data) return;
+
+    const notes = document.getElementById('stmt-notes').value.trim();
+    const stmt = {
+      number: await DocNumber.nextStatement(),
+      customerId: data.customerId || null,
+      customerName: data.customer?.name || 'All Customers',
+      from: data.from,
+      to: data.to,
+      invoices: data.invoices.map(i => ({ id: i.id, number: i.number, date: i.date||i.createdAt, total: i.total, status: i.status })),
+      creditNotes: data.creditNotes.map(c => ({ id: c.id, number: c.number, date: c.date||c.createdAt, total: c.total, reason: c.reason })),
+      totalInvoiced: data.totalInvoiced,
+      totalCredits: data.totalCredits,
+      balance: data.balance,
+      notes: Security.sanitize(notes)
+    };
+
+    const session = await Auth.getSession();
+    await DB.insert('statements', stmt);
+    await DB.log('CREATE_STATEMENT', `Generated statement ${stmt.number}`, session ? session.userId : null);
+    Toast.success(`Statement ${stmt.number} generated!`);
+    Modal.close('stmt-modal');
+    await renderStatements();
+  }
+
+  function buildStatementHTML(stmt) {
+    const invRows = (stmt.invoices||[]).map(inv => `
+      <tr>
+        <td>${Fmt.escape(inv.number)}</td>
+        <td>${Fmt.date(inv.date)}</td>
+        <td><span class="badge badge-${inv.status==='paid'?'success':inv.status==='overdue'?'danger':'warning'}">${(inv.status||'').toUpperCase()}</span></td>
+        <td style="text-align:right">${Fmt.currency(inv.total)}</td>
+        <td style="text-align:right">—</td>
+      </tr>
+    `).join('');
+
+    const cnRows = (stmt.creditNotes||[]).map(cn => `
+      <tr style="color:var(--danger)">
+        <td>${Fmt.escape(cn.number)}</td>
+        <td>${Fmt.date(cn.date)}</td>
+        <td><span class="badge badge-danger">CREDIT</span></td>
+        <td style="text-align:right">—</td>
+        <td style="text-align:right">(${Fmt.currency(cn.total)})</td>
+      </tr>
+    `).join('');
+
+    const docContent = `
+      <div class="doc-preview" id="print-stmt-doc">
+        <div class="doc-header">
+          <div class="doc-company">
+            <div class="company-name">Account Statement</div>
+            <div class="company-details">Customer Account Records</div>
+          </div>
+          <div class="doc-meta">
+            <div class="doc-type">Statement</div>
+            <div class="doc-number">${Fmt.escape(stmt.number)}</div>
+            <div class="doc-date">Generated: ${Fmt.date(stmt.createdAt)}</div>
+          </div>
+        </div>
+        <hr class="doc-divider">
+        <div class="doc-addresses">
+          <div>
+            <div class="doc-address-label">Account</div>
+            <div class="doc-address-name">${Fmt.escape(stmt.customerName)}</div>
+          </div>
+          <div>
+            <div class="doc-address-label">Period</div>
+            <div><strong>${Fmt.date(stmt.from)} — ${Fmt.date(stmt.to)}</strong></div>
+          </div>
+        </div>
+
+        <table class="doc-table" style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="padding:10px 14px;text-align:left">Reference</th>
+              <th style="padding:10px 14px;text-align:left">Date</th>
+              <th style="padding:10px 14px;text-align:left">Status</th>
+              <th style="padding:10px 14px;text-align:right">Debit (KSh)</th>
+              <th style="padding:10px 14px;text-align:right">Credit (KSh)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invRows}${cnRows}
+            ${!invRows && !cnRows ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No transactions in this period</td></tr>' : ''}
+          </tbody>
+        </table>
+
+        <div class="doc-totals">
+          <table class="doc-totals-table">
+            <tr><td style="color:var(--muted)">Total Invoiced</td><td>${Fmt.currency(stmt.totalInvoiced)}</td></tr>
+            <tr><td style="color:var(--danger)">Total Credits</td><td style="color:var(--danger)">(${Fmt.currency(stmt.totalCredits)})</td></tr>
+            <tr>
+              <td style="font-weight:700;color:var(--forest);font-family:'Playfair Display',serif;font-size:1.1rem;border-top:2px solid var(--forest);padding-top:8px">NET BALANCE</td>
+              <td style="font-weight:700;color:${stmt.balance>=0?'var(--forest)':'var(--danger)'};font-family:'Playfair Display',serif;font-size:1.1rem;border-top:2px solid var(--forest);padding-top:8px;text-align:right">${Fmt.currency(stmt.balance)}</td>
+            </tr>
+          </table>
+        </div>
+        ${stmt.notes ? `<div style="margin-top:20px;padding:12px 16px;background:var(--ivory);border-radius:var(--radius-sm);font-size:0.875rem"><strong>Notes:</strong> ${Fmt.escape(stmt.notes)}</div>` : ''}
+        <div class="doc-footer">NurturedChoiceProducts | This statement was auto-generated by the sales management system.</div>
+      </div>
+    `;
+    
+    return Letterhead.wrap(docContent);
+  }
+
+  async function viewStatement(id) {
+    const stmt = await DB.findById('statements', id);
+    if (!stmt) return;
+    currentStmt = stmt;
+    document.getElementById('stmt-preview-body').innerHTML = buildStatementHTML(stmt);
+    Modal.open('view-stmt-modal');
+  }
+
+  function printStatement() {
+    const el = document.getElementById('stmt-preview-body');
+    if (!el) return;
+    const win = window.open('', '_blank', 'width=850,height=700');
+    win.document.write(`<!DOCTYPE html><html><head><title>Statement</title>
+      <link rel="stylesheet" href="css/style.css">
+      <style>
+        body { background:white; padding:20mm 15mm; margin:0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      </style>
+      </head><body><div class="modal-body">${el.innerHTML}</div></body></html>`);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); win.close(); };
+  }
+
+  async function renderStatements() {
+    const stmts = (await DB.get('statements')).slice().reverse();
+    document.getElementById('stmt-count').textContent = `${stmts.length} statement(s)`;
+    const tbody = document.getElementById('stmt-tbody');
+    if (!stmts.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📄</div><h3>No statements yet</h3><p>Generate a statement for a customer or all customers</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = stmts.map(s => `
+      <tr>
+        <td><strong style="color:var(--forest)">${Fmt.escape(s.number)}</strong></td>
+        <td>${Fmt.escape(s.customerName)}</td>
+        <td style="font-size:0.8125rem">${Fmt.date(s.from)} — ${Fmt.date(s.to)}</td>
+        <td>${(s.invoices||[]).length} | ${Fmt.currency(s.totalInvoiced)}</td>
+        <td style="color:var(--danger)">${(s.creditNotes||[]).length} | (${Fmt.currency(s.totalCredits)})</td>
+        <td><strong style="color:${s.balance>=0?'var(--forest)':'var(--danger)'}">${Fmt.currency(s.balance)}</strong></td>
+        <td>${Fmt.date(s.createdAt)}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" onclick="viewStatement('${s.id}')">👁 View</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="deleteStatement('${s.id}')">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function deleteStatement(id) {
+    const s = await DB.findById('statements', id);
+    confirmAction(`Delete statement ${s?.number}?`, async () => {
+      await DB.delete('statements', id);
+      Toast.success('Statement deleted.');
+      await renderStatements();
+    });
+  }
+</script>
+</body>
+</html>

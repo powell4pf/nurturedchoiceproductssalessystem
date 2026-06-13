@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="no-referrer">
+  <title>Dashboard — NurturedChoiceProducts</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="sidebar-root"></div>
+
+<div class="app-layout">
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbar-date"></span>
+        <a href="invoices.html" class="btn btn-primary btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Invoice
+        </a>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- Stats -->
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <!-- Charts row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+        <div class="card animate-fade-up animate-delay-1">
+          <div class="card-header">
+            <h3 class="card-title">Monthly Revenue</h3>
+            <span class="badge badge-success">This Year</span>
+          </div>
+          <div class="card-body">
+            <canvas id="revenue-chart" height="180"></canvas>
+          </div>
+        </div>
+
+        <div class="card animate-fade-up animate-delay-2">
+          <div class="card-header">
+            <h3 class="card-title">Product Sales Share</h3>
+          </div>
+          <div class="card-body">
+            <canvas id="product-chart" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent invoices -->
+      <div class="card animate-fade-up animate-delay-3">
+        <div class="card-header">
+          <h3 class="card-title">Recent Invoices</h3>
+          <a href="invoices.html" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="recent-invoices-tbody">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Low stock -->
+      <div class="card animate-fade-up animate-delay-4" style="margin-top:20px">
+        <div class="card-header">
+          <h3 class="card-title">Stock Overview</h3>
+          <a href="products.html" class="btn btn-outline btn-sm">Manage Stock</a>
+        </div>
+        <div class="card-body" id="stock-overview"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  async function init() {
+    const session = await Auth.require();
+    if (!session) return;
+    document.getElementById('sidebar-root').innerHTML = renderSidebar();
+    await initSidebar();
+    await renderStats();
+    await renderRecentInvoices();
+    await renderStockOverview();
+    setTimeout(async () => { await drawRevenueChart(); await drawProductChart(); }, 100);
+  }
+  init();
+
+  async function renderStats() {
+    const invoices = await DB.get('invoices');
+    const now = new Date();
+    const thisMonth = invoices.filter(i => {
+      const d = new Date(i.createdAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+
+    const totalRevenue = invoices.reduce((s, i) => s + (i.total || 0), 0);
+    const monthRevenue = thisMonth.reduce((s, i) => s + (i.total || 0), 0);
+    const totalInvoices = invoices.length;
+    const creditNotes = (await DB.get('credit_notes')).length;
+    const products = (await DB.get('products')).filter(p => p.active);
+    const customers = await DB.get('customers');
+
+    const stats = [
+      { icon: '💰', label: 'Total Revenue', value: Fmt.currency(totalRevenue), color: '#1A3C2E', bg: '#C6F6D5', change: '', changeType: '' },
+      { icon: '📅', label: 'This Month', value: Fmt.currency(monthRevenue), color: '#2A6496', bg: '#BEE3F8', change: `${thisMonth.length} invoice(s)`, changeType: 'up' },
+      { icon: '🧾', label: 'Total Invoices', value: totalInvoices, color: '#B7791F', bg: '#FEFCBF', change: '', changeType: '' },
+      { icon: '📋', label: 'Credit Notes', value: creditNotes, color: '#C53030', bg: '#FED7D7', change: '', changeType: '' },
+      { icon: '📦', label: 'Active Products', value: products.length, color: '#276749', bg: '#C6F6D5', change: '', changeType: '' },
+      { icon: '👥', label: 'Customers', value: customers.length, color: '#4A5568', bg: '#EDF2F7', change: '', changeType: '' }
+    ];
+
+    document.getElementById('stats-grid').innerHTML = stats.map((s, i) => `
+      <div class="stat-card animate-fade-up" style="animation-delay:${i*0.07}s">
+        <div class="stat-icon" style="background:${s.bg}">
+          <span style="font-size:1.5rem">${s.icon}</span>
+        </div>
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${s.label}</div>
+        ${s.change ? `<div class="stat-change ${s.changeType}">${s.change}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  async function renderRecentInvoices() {
+    const invoices = (await DB.get('invoices')).slice(-10).reverse();
+    const tbody = document.getElementById('recent-invoices-tbody');
+    if (!invoices.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🧾</div><h3>No invoices yet</h3><p>Create your first invoice to get started</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = invoices.map(inv => `
+      <tr>
+        <td><strong>${Fmt.escape(inv.number)}</strong></td>
+        <td>${Fmt.escape(inv.customerName || 'Walk-in')}</td>
+        <td>${Fmt.date(inv.createdAt)}</td>
+        <td><strong>${Fmt.currency(inv.total)}</strong></td>
+        <td><span class="badge badge-${inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}">${(inv.status||'pending').charAt(0).toUpperCase()+(inv.status||'pending').slice(1)}</span></td>
+        <td><a href="invoices.html#${inv.id}" class="btn btn-outline btn-sm">View</a></td>
+      </tr>
+    `).join('');
+  }
+
+  async function renderStockOverview() {
+    const products = (await DB.get('products')).filter(p => p.active);
+    const container = document.getElementById('stock-overview');
+    container.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+        ${products.map(p => {
+          const pct = Math.min(100, (p.stock / 200) * 100);
+          const isLow = p.stock < 20;
+          return `
+            <div style="background:var(--ivory);border-radius:var(--radius-md);padding:16px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span style="font-size:1.5rem">${p.emoji}</span>
+                <div>
+                  <div style="font-weight:600;font-size:0.875rem;color:var(--forest)">${Fmt.escape(p.name)}</div>
+                  <div style="font-size:0.75rem;color:var(--muted)">${p.sku}</div>
+                </div>
+              </div>
+              <div style="background:var(--border);border-radius:99px;height:6px;overflow:hidden;margin-bottom:6px">
+                <div style="height:100%;width:${pct}%;background:${isLow?'var(--danger)':'linear-gradient(90deg,var(--forest),var(--gold))'};border-radius:99px;transition:width 1s ease"></div>
+              </div>
+              <div style="font-size:0.8125rem;font-weight:600;color:${isLow?'var(--danger)':'var(--slate)'}">
+                ${p.stock} units ${isLow?'⚠ Low stock':''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  async function drawRevenueChart() {
+    const canvas = document.getElementById('revenue-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const invoices = await DB.get('invoices');
+    const now = new Date();
+    const months = [];
+    const data = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d.toLocaleDateString('en-KE', { month: 'short' }));
+      const rev = invoices.filter(inv => {
+        const id = new Date(inv.createdAt);
+        return id.getMonth() === d.getMonth() && id.getFullYear() === d.getFullYear();
+      }).reduce((s, inv) => s + (inv.total || 0), 0);
+      data.push(rev);
+    }
+
+    const W = canvas.offsetWidth || 400;
+    const H = 180;
+    canvas.width = W; canvas.height = H;
+
+    const max = Math.max(...data, 1000);
+    const pad = { l: 50, r: 20, t: 20, b: 30 };
+    const chartW = W - pad.l - pad.r;
+    const chartH = H - pad.t - pad.b;
+    const barW = (chartW / data.length) * 0.55;
+    const gap = chartW / data.length;
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(26,60,46,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + (chartH / 4) * i;
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+      ctx.fillStyle = '#718096'; ctx.font = '10px Inter'; ctx.textAlign = 'right';
+      ctx.fillText(Fmt.currency(max * (1 - i/4), '').replace(/\.00$/,''), pad.l - 4, y + 4);
+    }
+
+    // Bars
+    data.forEach((val, i) => {
+      const x = pad.l + gap * i + gap / 2 - barW / 2;
+      const barH = (val / max) * chartH;
+      const y = pad.t + chartH - barH;
+
+      const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+      grad.addColorStop(0, '#1A3C2E');
+      grad.addColorStop(1, '#3D7A5A');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [4,4,0,0]) : ctx.rect(x, y, barW, barH);
+      ctx.fill();
+
+      ctx.fillStyle = '#718096'; ctx.font = '10px Inter'; ctx.textAlign = 'center';
+      ctx.fillText(months[i], pad.l + gap * i + gap / 2, H - 8);
+    });
+  }
+
+  async function drawProductChart() {
+    const canvas = document.getElementById('product-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const invoices = await DB.get('invoices');
+    const products = await DB.get('products');
+    const totals = {};
+
+    invoices.forEach(inv => {
+      (inv.items || []).forEach(item => {
+        totals[item.productId] = (totals[item.productId] || 0) + (item.qty * item.price);
+      });
+    });
+
+    const colors = ['#1A3C2E', '#C9A84C', '#3D7A5A', '#E8C97A'];
+    const W = canvas.offsetWidth || 350;
+    const H = 180;
+    canvas.width = W; canvas.height = H;
+
+    const data = products.filter(p => p.active).map((p, i) => ({
+      label: p.name.split(' ').slice(0, 2).join(' '),
+      emoji: p.emoji,
+      value: totals[p.id] || 0,
+      color: colors[i % colors.length]
+    }));
+
+    const total = data.reduce((s, d) => s + d.value, 0) || 1;
+    const cx = H / 2 + 10, cy = H / 2;
+    const r = 60, ri = 35;
+    let angle = -Math.PI / 2;
+
+    data.forEach((d, i) => {
+      const slice = (d.value / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle, angle + slice);
+      ctx.closePath();
+      ctx.fillStyle = d.color;
+      ctx.fill();
+      angle += slice;
+    });
+
+    // Donut hole
+    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, 2 * Math.PI);
+    ctx.fillStyle = 'white'; ctx.fill();
+
+    // Legend
+    data.forEach((d, i) => {
+      const y = 30 + i * 44;
+      const x = H + 30;
+      ctx.fillStyle = d.color;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, 12, 12, 3) : ctx.rect(x, y, 12, 12);
+      ctx.fill();
+      ctx.fillStyle = '#1C1C1C'; ctx.font = '11px Inter'; ctx.textAlign = 'left';
+      ctx.fillText(d.label, x + 18, y + 10);
+      ctx.fillStyle = '#718096'; ctx.font = '10px Inter';
+      ctx.fillText(Fmt.currency(d.value), x + 18, y + 24);
+    });
+  }
+
+  window.addEventListener('resize', () => { drawRevenueChart(); drawProductChart(); });
+</script>
+</body>
+</html>

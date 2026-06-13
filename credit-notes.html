@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Frame-Options" content="DENY"><meta name="referrer" content="no-referrer">
+  <title>Credit Notes — NurturedChoiceProducts</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="sidebar-root"></div>
+<div class="app-layout">
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="page-title">Credit Notes</h1></div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbar-date"></span>
+        <div class="search-bar">
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search credit notes…">
+        </div>
+        <button class="btn btn-primary" onclick="openNewCreditNote()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Credit Note
+        </button>
+      </div>
+    </header>
+    <div class="content-area">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Credit Notes</h3>
+          <span class="badge badge-neutral" id="cn-count">0</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Credit Note #</th>
+                <th>Ref Invoice</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th>Reason</th>
+                <th>Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cn-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Credit Note Modal -->
+<div class="modal-overlay" id="cn-modal">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title">New Credit Note</h3>
+      <button class="modal-close" onclick="Modal.close('cn-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2" style="margin-bottom:20px">
+        <div class="form-group">
+          <label class="form-label">Credit Note Number</label>
+          <input class="form-control" type="text" id="cn-number" placeholder="CN-00001">
+          <small style="color:var(--muted);font-size:0.75rem">Auto-generated or enter manually</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input class="form-control" type="date" id="cn-date">
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:20px">
+        <div class="form-group">
+          <label class="form-label">Reference Invoice</label>
+          <select class="form-control" id="cn-invoice" onchange="loadInvoiceItems()">
+            <option value="">-- Select Invoice (optional) --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Customer</label>
+          <input class="form-control" type="text" id="cn-customer" placeholder="Customer name" readonly>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label class="form-label">Reason for Credit Note</label>
+        <textarea class="form-control" id="cn-reason" rows="2" placeholder="Reason for issuing this credit note…" required></textarea>
+      </div>
+
+      <!-- Line items -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h4 style="font-family:'Playfair Display',serif;color:var(--forest);font-size:1rem">Credited Items</h4>
+          <button class="btn btn-outline btn-sm" onclick="addCNItem()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Item
+          </button>
+        </div>
+        <div class="table-wrapper">
+          <table class="line-items-table">
+            <thead>
+              <tr>
+                <th style="width:40%">Product / Description</th>
+                <th style="width:20%">Unit Price (KSh)</th>
+                <th style="width:15%">Qty</th>
+                <th style="width:20%">Total</th>
+                <th style="width:5%"></th>
+              </tr>
+            </thead>
+            <tbody id="cn-items-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <table style="width:260px">
+            <tr>
+              <td style="padding:8px;font-family:'Playfair Display',serif;font-size:1rem;color:var(--forest);font-weight:700">CREDIT TOTAL</td>
+              <td style="padding:8px;text-align:right;font-family:'Playfair Display',serif;font-size:1.125rem;color:var(--forest);font-weight:700" id="cn-total">KSh 0.00</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modal.close('cn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCreditNote()">Issue Credit Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- View CN Modal -->
+<div class="modal-overlay" id="view-cn-modal">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title">Credit Note Preview</h3>
+      <button class="modal-close" onclick="Modal.close('view-cn-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="cn-preview-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modal.close('view-cn-modal')">Close</button>
+      <button class="btn btn-gold" onclick="printCN()">🖨️ Print Credit Note</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  async function init() {
+    document.getElementById('sidebar-root').innerHTML = renderSidebar();
+    await initSidebar();
+    await renderCNList();
+  }
+  init();
+
+  let cnItems = [];
+  let currentCN = null;
+
+  async function populateInvoiceSelect() {
+    const sel = document.getElementById('cn-invoice');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">-- Select Invoice (optional) --</option>';
+    (await DB.get('invoices')).slice().reverse().forEach(inv => {
+      sel.innerHTML += `<option value="${inv.id}">${Fmt.escape(inv.number)} — ${Fmt.escape(inv.customerName||'Walk-in')} (${Fmt.currency(inv.total)})</option>`;
+    });
+    if (current) sel.value = current;
+  }
+
+  async function openNewCreditNote(fromInvoiceId) {
+    cnItems = [];
+    document.getElementById('cn-number').value = await DocNumber.nextCreditNote();
+    document.getElementById('cn-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('cn-reason').value = '';
+    document.getElementById('cn-customer').value = '';
+    await populateInvoiceSelect();
+
+    if (fromInvoiceId) {
+      document.getElementById('cn-invoice').value = fromInvoiceId;
+      await loadInvoiceItems();
+    }
+    await renderCNItems();
+    Modal.open('cn-modal');
+  }
+
+  async function loadInvoiceItems() {
+    const invId = document.getElementById('cn-invoice').value;
+    if (!invId) { document.getElementById('cn-customer').value = ''; cnItems = []; renderCNItems(); return; }
+    const inv = await DB.findById('invoices', invId);
+    if (!inv) return;
+    document.getElementById('cn-customer').value = inv.customerName || 'Walk-in Customer';
+    cnItems = JSON.parse(JSON.stringify(inv.items || []));
+    await renderCNItems();
+  }
+
+  async function addCNItem() {
+    const products = (await DB.get('products')).filter(p => p.active);
+    const p = products[0];
+    cnItems.push({ id: Date.now().toString(), productId: p?.id||'', name: p?.name||'', price: p?.price||0, qty: 1 });
+    await renderCNItems();
+  }
+
+  async function renderCNItems() {
+    const products = (await DB.get('products')).filter(p => p.active);
+    const tbody = document.getElementById('cn-items-tbody');
+    if (!cnItems.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No items. Select an invoice or add items manually.</td></tr>`;
+      document.getElementById('cn-total').textContent = 'KSh 0.00';
+      return;
+    }
+    tbody.innerHTML = cnItems.map((item, idx) => `
+      <tr>
+        <td>
+          <select class="form-control" style="font-size:0.875rem" onchange="updateCNProduct(${idx}, this.value)">
+            ${products.map(p => `<option value="${p.id}" ${p.id===item.productId?'selected':''}>${Fmt.escape(p.emoji)} ${Fmt.escape(p.name)}</option>`).join('')}
+          </select>
+        </td>
+        <td><input class="form-control" type="number" min="0" step="0.01" value="${item.price}" style="font-size:0.875rem" onchange="updateCNPrice(${idx},this.value)"></td>
+        <td><input class="form-control" type="number" min="1" step="1" value="${item.qty}" style="font-size:0.875rem" onchange="updateCNQty(${idx},this.value)"></td>
+        <td><strong>${Fmt.currency(item.price * item.qty)}</strong></td>
+        <td><button class="btn btn-sm" style="color:var(--danger);background:var(--danger-light);border:none" onclick="removeCNItem(${idx})">✕</button></td>
+      </tr>
+    `).join('');
+    const total = cnItems.reduce((s, i) => s + i.price * i.qty, 0);
+    document.getElementById('cn-total').textContent = Fmt.currency(total);
+  }
+
+  async function updateCNProduct(idx, pid) { const p = await DB.findById('products', pid); if(p){cnItems[idx].productId=pid;cnItems[idx].name=p.name;cnItems[idx].price=p.price;} await renderCNItems(); }
+  async function updateCNPrice(idx, val) { cnItems[idx].price = parseFloat(val)||0; await renderCNItems(); }
+  async function updateCNQty(idx, val) { cnItems[idx].qty = Math.max(1, parseInt(val)||1); await renderCNItems(); }
+  async function removeCNItem(idx) { cnItems.splice(idx,1); await renderCNItems(); }
+
+  async function saveCreditNote() {
+    const number = document.getElementById('cn-number').value.trim();
+    const reason = document.getElementById('cn-reason').value.trim();
+    const invId = document.getElementById('cn-invoice').value;
+    const date = document.getElementById('cn-date').value;
+
+    if (!number) { Toast.error('Please enter a credit note number.'); return; }
+    if (!reason) { Toast.error('Please enter a reason for the credit note.'); return; }
+    if (!cnItems.length) { Toast.error('Please add at least one item.'); return; }
+
+    const inv = invId ? await DB.findById('invoices', invId) : null;
+    const total = cnItems.reduce((s, i) => s + i.price * i.qty, 0);
+
+    const cn = {
+      number: Security.sanitize(number),
+      invoiceId: invId || null,
+      invoiceNumber: inv ? inv.number : null,
+      customerId: inv?.customerId || null,
+      customerName: inv?.customerName || document.getElementById('cn-customer').value || 'Walk-in',
+      reason: Security.sanitize(reason),
+      items: cnItems.map(i => ({ ...i, name: Security.sanitize(i.name) })),
+      total,
+      date: date || new Date().toISOString().split('T')[0]
+    };
+
+    const session = await Auth.getSession();
+    await DB.insert('credit_notes', cn);
+    await DB.log('CREATE_CN', `Created credit note ${number}`, session ? session.userId : null);
+    Toast.success(`Credit note ${number} issued!`);
+    Modal.close('cn-modal');
+    await renderCNList();
+  }
+
+  async function renderCNList() {
+    let cns = (await DB.get('credit_notes')).slice().reverse();
+    const q = document.getElementById('search-input').value.toLowerCase();
+    if (q) cns = cns.filter(c => (c.number||'').toLowerCase().includes(q) || (c.customerName||'').toLowerCase().includes(q) || (c.invoiceNumber||'').toLowerCase().includes(q));
+
+    document.getElementById('cn-count').textContent = `${cns.length} note(s)`;
+    const tbody = document.getElementById('cn-tbody');
+    if (!cns.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><h3>No credit notes</h3><p>Issue a credit note against an invoice or independently</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = cns.map(cn => `
+      <tr>
+        <td><strong style="color:var(--forest)">${Fmt.escape(cn.number)}</strong></td>
+        <td>${cn.invoiceNumber ? `<a href="invoices.html#${cn.invoiceId}" style="color:var(--forest-light)">${Fmt.escape(cn.invoiceNumber)}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${Fmt.escape(cn.customerName||'—')}</td>
+        <td>${Fmt.date(cn.date||cn.createdAt)}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${Fmt.escape(cn.reason||'—')}</td>
+        <td><strong style="color:var(--danger)">(${Fmt.currency(cn.total)})</strong></td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" onclick="viewCN('${cn.id}')">👁</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="deleteCN('${cn.id}')">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function viewCN(id) {
+    const cn = await DB.findById('credit_notes', id);
+    if (!cn) return;
+    currentCN = cn;
+    const rows = (cn.items||[]).map(item => `
+      <tr>
+        <td>${Fmt.escape(item.name)}</td>
+        <td style="text-align:right">${Fmt.currency(item.price)}</td>
+        <td style="text-align:center">${item.qty}</td>
+        <td style="text-align:right"><strong>(${Fmt.currency(item.price*item.qty)})</strong></td>
+      </tr>
+    `).join('');
+
+    const docContent = `
+      <div class="doc-preview" id="print-cn-doc">
+        <div class="doc-header">
+          <div class="doc-company">
+            <div class="company-name">Credit Note</div>
+            <div class="company-details">Document Management</div>
+          </div>
+          <div class="doc-meta">
+            <div class="doc-type" style="color:var(--danger)">Credit Note</div>
+            <div class="doc-number">${Fmt.escape(cn.number)}</div>
+            <div class="doc-date">Date: ${Fmt.date(cn.date||cn.createdAt)}</div>
+            ${cn.invoiceNumber ? `<div style="margin-top:4px;font-size:0.8125rem;color:var(--muted)">Ref: ${Fmt.escape(cn.invoiceNumber)}</div>` : ''}
+          </div>
+        </div>
+        <hr class="doc-divider" style="border-color:var(--danger)">
+        <div class="doc-addresses">
+          <div>
+            <div class="doc-address-label">Credit To</div>
+            <div class="doc-address-name">${Fmt.escape(cn.customerName||'Walk-in')}</div>
+          </div>
+          <div>
+            <div class="doc-address-label">Reason for Credit</div>
+            <div style="color:var(--slate);font-size:0.875rem">${Fmt.escape(cn.reason)}</div>
+          </div>
+        </div>
+        <table class="doc-table" style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:10px 14px;text-align:left">Description</th>
+            <th style="padding:10px 14px;text-align:right">Unit Price</th>
+            <th style="padding:10px 14px;text-align:center">Qty</th>
+            <th style="padding:10px 14px;text-align:right">Amount</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="doc-totals">
+          <table class="doc-totals-table">
+            <tr>
+              <td style="font-weight:700;color:var(--danger);font-family:'Playfair Display',serif;font-size:1.1rem;border-top:2px solid var(--danger);padding-top:8px">CREDIT TOTAL</td>
+              <td style="font-weight:700;color:var(--danger);font-family:'Playfair Display',serif;font-size:1.1rem;border-top:2px solid var(--danger);padding-top:8px;text-align:right">(${Fmt.currency(cn.total)})</td>
+            </tr>
+          </table>
+        </div>
+        <div class="doc-footer">NurturedChoiceProducts | Nairobi, Kenya — This credit note is valid against the referenced invoice.</div>
+      </div>
+    `;
+    
+    document.getElementById('cn-preview-body').innerHTML = Letterhead.wrap(docContent);
+    Modal.open('view-cn-modal');
+  }
+
+  function printCN() {
+    const el = document.getElementById('cn-preview-body');
+    if (!el) return;
+    const win = window.open('', '_blank', 'width=850,height=700');
+    win.document.write(`<!DOCTYPE html><html><head><title>Credit Note</title>
+      <link rel="stylesheet" href="css/style.css">
+      <style>
+        body { background:white; padding:20mm 15mm; margin:0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      </style>
+      </head><body><div class="modal-body">${el.innerHTML}</div></body></html>`);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); win.close(); };
+  }
+
+  async function deleteCN(id) {
+    const cn = await DB.findById('credit_notes', id);
+    confirmAction(`Delete credit note ${cn?.number}? This cannot be undone.`, async () => {
+      await DB.delete('credit_notes', id);
+      Toast.success('Credit note deleted.');
+      await renderCNList();
+    });
+  }
+
+  document.getElementById('search-input').addEventListener('input', renderCNList);
+
+  // Check for ?from= param
+  const params = new URLSearchParams(window.location.search);
+  const fromId = params.get('from');
+
+  if (fromId) {
+    setTimeout(() => openNewCreditNote(fromId), 300);
+  }
+</script>
+</body>
+</html>
