@@ -369,17 +369,55 @@
   }
 
   function printReport() {
-    const el = document.getElementById('report-content');
-    const win = window.open('', '_blank', 'width=850,height=700');
-    win.document.write(`<!DOCTYPE html><html><head><title>Sales Report</title>
-      <link rel="stylesheet" href="css/style.css">
-      <style>
-        body { background:white; padding:20mm 15mm; margin:0; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      </style>
-      </head><body>${el.innerHTML}</body></html>`);
-    win.document.close();
-    win.onload = () => { win.focus(); win.print(); win.close(); };
+    try {
+      const el = document.getElementById('report-content');
+      if (!el) throw new Error('Report content not found');
+
+      const win = window.open('', '_blank', 'width=850,height=700');
+      if (!win) {
+        alert('Popup blocked. Please allow popups for this site to print the report.');
+        return;
+      }
+
+      const html = `<!DOCTYPE html><html><head><title>Sales Report</title>
+        <link rel="stylesheet" href="css/style.css">
+        <style>
+          body { background:white; padding:20mm 15mm; margin:0; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        </style>
+        </head><body>${el.innerHTML}</body></html>`;
+
+      // Write then attempt to print once the new window is ready.
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+
+      const tryPrint = () => {
+        try {
+          win.focus();
+          // Some browsers may not fire onload for about:blank writes, wait briefly then print.
+          setTimeout(() => {
+            try { win.print(); } catch (e) { console.warn('Print failed', e); }
+            try { win.close(); } catch (e) { /* ignore */ }
+          }, 250);
+        } catch (err) {
+          console.error('Unable to print report', err);
+          alert('Unable to print the report. Check console for details.');
+        }
+      };
+
+      // If the window has a document readyState, wait for it; otherwise fallback to timeout.
+      if (win.document.readyState === 'complete' || win.document.readyState === 'interactive') {
+        tryPrint();
+      } else {
+        win.onload = tryPrint;
+        // safety fallback
+        setTimeout(tryPrint, 1000);
+      }
+    } catch (ex) {
+      console.error(ex);
+      alert('Could not prepare report for printing: ' + (ex && ex.message));
+    }
   }
 </script>
 </body>
