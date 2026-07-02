@@ -252,24 +252,6 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .btn-outline:hover { border-color: var(--forest-light); color: var(--forest); background: var(--gold-pale); }
 
-.btn-google {
-  background: #ffffff;
-  color: var(--charcoal);
-  border-color: rgba(0,0,0,0.08);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-}
-.btn-google:hover {
-  background: #f7f7f7;
-  transform: translateY(-1px);
-}
-.btn-google .google-icon {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-}
-
 .btn-danger { background: var(--danger); color: var(--white); }
 .btn-danger:hover { background: #9B2C2C; transform: translateY(-1px); }
 

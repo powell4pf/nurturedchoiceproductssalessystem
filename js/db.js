@@ -206,6 +206,21 @@ const Auth = {
     return { ok: true, session: data.session };
   },
 
+  async signInWithProvider(provider) {
+    const supabase = getSupabase();
+    if (!supabase) return { ok: false, msg: 'Database connection not established.' };
+    const redirectTo = window.location.protocol.startsWith('http')
+      ? `${window.location.origin}/dashboard.html`
+      : window.location.href;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo }
+    });
+    if (error) return { ok: false, msg: error.message };
+    return { ok: true, data };
+  },
+
   async register(email, password, fullName) {
     const supabase = getSupabase();
     if (!supabase) return { ok: false, msg: 'Database connection not established.' };
